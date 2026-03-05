@@ -1,4 +1,4 @@
-# 📊 Automação de Conciliação Financeira (Case Real)
+# 📊 Automação de Conciliação Financeira (Caso Real)
 
 Este projeto automatiza o cruzamento de dados entre planilhas de comissões e a base geral de vendas, tarefa que anteriormente era realizada manualmente.
 
