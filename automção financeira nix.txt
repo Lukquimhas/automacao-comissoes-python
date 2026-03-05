@@ -1,0 +1,71 @@
+import pandas as pd
+import os
+
+# CONFIGURAÇÃO DE CAMINHOS (Modo Genérico para Portfólio)
+# Para rodar, os arquivos devem estar em uma pasta chamada 'dados'
+ARQUIVO_PESSOAS = "dados/comissoes_colaboradores.xlsx"
+ARQUIVO_GERAL = "dados/base_geral_2025.xlsx"
+CAMINHO_SAIDA = "Relatorio_Final_Processado.xlsx"
+
+def limpar_reserva(valor):
+    """Padroniza o código de reserva (remove .0 e espaços)."""
+    if pd.isna(valor): return ""
+    s = str(valor).strip().upper()
+    if s.endswith('.0'): s = s[:-2]
+    return s
+
+def buscar_coluna_real(termos, colunas_df):
+    """Busca o nome real da coluna com base em termos prováveis."""
+    for termo in termos:
+        for col in colunas_df:
+            if termo in col: return col
+    return None
+
+def processar_dados():
+    try:
+        print("--- INICIANDO PROCESSAMENTO DE DADOS ---")
+        
+        # 1. Mapear reservas das abas de cada colaborador
+        xl_pessoas = pd.ExcelFile(ARQUIVO_PESSOAS)
+        mapa_reservas = {}
+
+        for nome_aba in xl_pessoas.sheet_names:
+            if nome_aba.lower() in ['resumo', 'planilha1', 'capa']: continue
+            
+            df_aba = pd.read_excel(xl_pessoas, sheet_name=nome_aba)
+            df_aba.columns = [str(c).strip().upper() for c in df_aba.columns]
+            
+            if 'RESERVA' in df_aba.columns:
+                for res in df_aba['RESERVA'].apply(limpar_reserva).unique():
+                    if res != "":
+                        mapa_reservas[res] = nome_aba
+
+        # 2. Carregar a Base Geral e cruzar dados
+        df_geral = pd.read_excel(ARQUIVO_GERAL)
+        df_geral.columns = [str(c).strip().upper() for c in df_geral.columns]
+
+        df_geral['RESERVA_LIMPA'] = df_geral['RESERVA'].apply(limpar_reserva)
+        df_geral['COLABORADOR_IDENTIFICADO'] = df_geral['RESERVA_LIMPA'].map(mapa_reservas)
+
+        # 3. Mapeando colunas necessárias
+        c_forn = buscar_coluna_real(['FORNECEDOR', 'FORN', 'VENDOR'], df_geral.columns)
+        c_pass = buscar_coluna_real(['PASSAGEIRO', 'PAX'], df_geral.columns)
+        c_comi = buscar_coluna_real(['COMISSÃO', 'VALOR'], df_geral.columns)
+
+        cols_relatorio = ['COLABORADOR_IDENTIFICADO', 'RESERVA']
+        for c in [c_forn, c_pass, c_comi]:
+            if c and c not in cols_relatorio: cols_relatorio.append(c)
+
+        df_detalhado = df_geral[cols_relatorio].dropna(subset=['COLABORADOR_IDENTIFICADO'])
+
+        # 4. Salvar Resultado com Formatação
+        with pd.ExcelWriter(CAMINHO_SAIDA, engine='xlsxwriter') as writer:
+            df_detalhado.to_excel(writer, sheet_name='Relatorio_Processado', index=False)
+            
+        print(f"--- SUCESSO! Arquivo salvo como: {CAMINHO_SAIDA} ---")
+
+    except Exception as e:
+        print(f"ERRO: {e}")
+
+if __name__ == "__main__":
+    processar_dados()
